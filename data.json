@@ -1388,5 +1388,23 @@
     "images": [],
     "video": "",
     "type": "image"
+  },
+  {
+    "cat": "游戏/娱乐/影视",
+    "title": "2026-05-03 04:26:43",
+    "text": "Seedance plus GPT Image 2 on PixPretty @PixPrettyAI \n\nImage prompt :\n\nA 16-panel instructional storyboard grid featuring a calm, athletic young woman performing a sequence of yoga poses in the same spot. Clean minimal studio background with soft natural lighting, consistent full-body framing across all panels. The woman wears a fitted neutral-toned yoga outfit (leggings + sports top), barefoot, hair tied back.\nEach panel shows a different pose in a smooth progression:\nMountain Pose (Tadasana)\nUpward Stretch (Arms Overhead)\nForward Fold (Uttanasana)\nHalf Lift\nPlank Pose\nChaturanga (Low Plank)\nUpward Facing Dog\nDownward Dog\nLow Lunge (Right Leg Forward)\nWarrior I\nWarrior II\nReverse Warrior\nTriangle Pose\nTree Pose (Balance)\nSeated Fold\nFinal Meditation Pose (Eyes Closed, Calm Expression)\nStyle: modern instructional design, evenly spaced grid layout, each frame labeled with step number and pose name, subtle arrows indicating movement flow, soft shadows, neutral background, high detail, realistic proportions, elegant and calming aesthetic.",
+    "link": "https://x.com/AIwithSynthia/status/2050794157531373709",
+    "title_ja": "2026-05-03 04:26:43",
+    "text_ja": "",
+    "type": "video",
+    "date": "2026-05-03 04:26:43",
+    "image_prompt": "A 16-panel instructional storyboard grid featuring a calm, athletic young woman performing a sequence of yoga poses in the same spot. Clean minimal studio background with soft natural lighting, consistent full-body framing across all panels. The woman wears a fitted neutral-toned yoga outfit (leggings + sports top), barefoot, hair tied back.\nEach panel shows a different pose in a smooth progression:\nMountain Pose (Tadasana)\nUpward Stretch (Arms Overhead)\nForward Fold (Uttanasana)\nHalf Lift\nPlank Pose\nChaturanga (Low Plank)\nUpward Facing Dog\nDownward Dog\nLow Lunge (Right Leg Forward)\nWarrior I\nWarrior II\nReverse Warrior\nTriangle Pose\nTree Pose (Balance)\nSeated Fold\nFinal Meditation Pose (Eyes Closed, Calm Expression)\nStyle: modern instructional design, evenly spaced grid layout, each frame labeled with step number and pose name, subtle arrows indicating movement flow, soft shadows, neutral background, high detail, realistic proportions, elegant and calming aesthetic.",
+    "image_prompt_ja": "",
+    "video_prompt": "Seedance plus GPT Image 2 on PixPretty @PixPrettyAI \n\nImage prompt :\n\nA 16-panel instructional storyboard grid featuring a calm, athletic young woman performing a sequence of yoga poses in the same spot. Clean minimal studio background with soft natural lighting, consistent full-body framing across all panels. The woman wears a fitted neutral-toned yoga outfit (leggings + sports top), barefoot, hair tied back.\nEach panel shows a different pose in a smooth progression:\nMountain Pose (Tadasana)\nUpward Stretch (Arms Overhead)\nForward Fold (Uttanasana)\nHalf Lift\nPlank Pose\nChaturanga (Low Plank)\nUpward Facing Dog\nDownward Dog\nLow Lunge (Right Leg Forward)\nWarrior I\nWarrior II\nReverse Warrior\nTriangle Pose\nTree Pose (Balance)\nSeated Fold\nFinal Meditation Pose (Eyes Closed, Calm Expression)\nStyle: modern instructional design, evenly spaced grid layout, each frame labeled with step number and pose name, subtle arrows indicating movement flow, soft shadows, neutral background, high detail, realistic proportions, elegant and calming aesthetic.",
+    "video_prompt_ja": "",
+    "images": [
+      "images/AIwithSynthia_2050794157531373709_2.jpg"
+    ],
+    "video": "videos/AIwithSynthia_2050794157531373709_1.mp4"
   }
 ]
