@@ -158,6 +158,7 @@ def main():
         "text_ja": "",
         "type": ptype,
         "date": date,
+        "author": f"@{author_name}",
         "image_prompt": image_content,
         "image_prompt_ja": "",
         "video_prompt": video_content,
