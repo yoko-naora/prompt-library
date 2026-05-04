@@ -1,0 +1,61 @@
+name: Update Prompt Library
+
+on:
+  schedule:
+    # Every 3 days at 01:37 UTC (~10:37 JST)
+    - cron: '37 1 */3 * *'
+  workflow_dispatch:
+    inputs:
+      fetch_new:
+        description: 'Attempt to fetch new tweets from @MrLarus'
+        type: boolean
+        default: false
+      download_media:
+        description: 'Download media for new prompts'
+        type: boolean
+        default: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install yt-dlp
+
+      - name: Fetch new tweets (optional)
+        if: ${{ github.event.inputs.fetch_new == 'true' }}
+        run: |
+          echo "Fetching new tweets from @MrLarus..."
+          # TODO: Implement X API / RSS fetching
+          # For now: manually add new prompts to data.json and push
+          echo "Skipped - requires X API configuration"
+
+      - name: Download media (optional)
+        if: ${{ github.event.inputs.download_media == 'true' }}
+        run: |
+          python scripts/download_media.py --limit 10 --delay 5
+
+      - name: Rebuild HTML
+        run: python scripts/build_html.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json index.html images/ videos/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto-update: rebuild site [skip ci]"
+            git push
+            echo "Changes pushed"
+          fi
