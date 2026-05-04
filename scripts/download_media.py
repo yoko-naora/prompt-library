@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-Download and VERIFY media from MrLarus X posts.
-- Downloads images/videos via yt-dlp
-- Verifies every file (size > 0, valid format)
+Download and VERIFY media from MrLarus X posts using gallery-dl.
+- Downloads images/videos via gallery-dl (works without X login)
+- Verifies every file (size > 0, valid format, minimum size)
 - Retries failed downloads up to 3 times
 - Only writes to data.json after verification
 - Prints clear success/failure report
 
-Requirements: pip install yt-dlp
+Requirements: pip install gallery-dl
 Usage: python scripts/download_media.py [--limit N] [--retries N]
 """
 
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -23,22 +24,22 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_FILE = ROOT / "data.json"
 IMAGES_DIR = ROOT / "images"
 VIDEOS_DIR = ROOT / "videos"
+TMP_DIR = ROOT / ".dl_tmp"
 FAILURE_LOG = ROOT / "download_failures.txt"
 
 DEFAULT_RETRIES = 3
-DELAY_BASE = 5  # seconds between requests
+DELAY_BASE = 5
 
 
 def check_prerequisites():
-    """Verify yt-dlp is installed."""
     try:
-        r = subprocess.run(["yt-dlp", "--version"], capture_output=True, text=True, timeout=10)
+        r = subprocess.run(["gallery-dl", "--version"], capture_output=True, text=True, timeout=10)
         if r.returncode == 0:
-            print(f"  yt-dlp version: {r.stdout.strip()}")
+            print(f"  gallery-dl version: {r.stdout.strip()}")
             return True
     except FileNotFoundError:
         pass
-    print("ERROR: yt-dlp not found. Install with: pip install yt-dlp")
+    print("ERROR: gallery-dl not found. Install with: pip install gallery-dl")
     return False
 
 
@@ -52,160 +53,151 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def sanitize(s, max_len=50):
-    s = re.sub(r'[<>:"/\\|?*]', '', s)
-    s = re.sub(r'\s+', '_', s.strip())
-    return s[:max_len]
-
-
 def verify_file(filepath):
-    """Check that a downloaded file is valid (exists, non-empty, right extension)."""
     path = Path(filepath)
     if not path.exists():
-        return False, "file not found"
-    if path.stat().st_size == 0:
-        path.unlink()  # Remove empty file
-        return False, "empty file (0 bytes)"
+        return False, "not found"
+    size = path.stat().st_size
+    if size == 0:
+        path.unlink()
+        return False, "empty (0 bytes)"
     ext = path.suffix.lower()
-    valid = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov'}
-    if ext not in valid:
-        return False, f"unexpected extension: {ext}"
-    if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
-        if path.stat().st_size < 500:
-            path.unlink()
-            return False, f"image too small ({path.stat().st_size} bytes)"
-    if ext in ('.mp4', '.webm', '.mov'):
-        if path.stat().st_size < 5000:
-            path.unlink()
-            return False, f"video too small ({path.stat().st_size} bytes)"
-    return True, "ok"
+    valid_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov'}
+    if ext not in valid_exts:
+        return False, f"bad extension {ext}"
+    if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp') and size < 500:
+        path.unlink()
+        return False, f"image too small ({size}B)"
+    if ext in ('.mp4', '.webm', '.mov') and size < 5000:
+        path.unlink()
+        return False, f"video too small ({size}B)"
+    return True, f"{size//1024}KB"
 
 
-def download_one(url, output_dir, base_name, retries=DEFAULT_RETRIES):
+def download_one(url, retries=DEFAULT_RETRIES):
     """
-    Download all media from a single URL using yt-dlp.
-    Returns (image_paths, video_path, errors).
+    Download media from a single X URL. Returns (image_paths, video_path, errors).
+    All files go to TMP_DIR first, then caller moves them.
     """
     images = []
     video = None
     errors = []
 
-    output_template = str(output_dir / f"{base_name}_%(autonumber)02d.%(ext)s")
+    # Clean tmp dir
+    if TMP_DIR.exists():
+        shutil.rmtree(TMP_DIR)
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
 
     for attempt in range(1, retries + 1):
         if attempt > 1:
             wait = DELAY_BASE * (2 ** attempt)
             print(f"    Retry {attempt}/{retries} after {wait}s...")
             time.sleep(wait)
+            # Clean tmp for retry
+            if TMP_DIR.exists():
+                shutil.rmtree(TMP_DIR)
+            TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Record existing files before download
-        before = set()
-        for f in output_dir.iterdir():
-            if f.name.startswith(base_name):
-                before.add(f.name)
-
-        cmd = [
-            "yt-dlp",
-            "--no-playlist",
-            "--no-mtime",
-            "-o", output_template,
-            "--restrict-filenames",
-            "--socket-timeout", "30",
-            "--retries", "3",
-            "--fragment-retries", "3",
-        ]
-
-        # For X/Twitter, try loading cookies from browser if available
-        # This helps with authentication
-        cmd.extend([url])
-
+        # First, test if media exists (dry run)
+        dry_cmd = ["gallery-dl", "--no-download", url]
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True, text=True,
-                timeout=180,
-                cwd=str(output_dir)
-            )
+            dry = subprocess.run(dry_cmd, capture_output=True, text=True, timeout=30)
+        except subprocess.TimeoutExpired:
+            errors.append(f"Attempt {attempt}: timed out checking media")
+            continue
+
+        if dry.returncode != 0:
+            stderr = (dry.stderr or "").lower()
+            if "not found" in stderr or "404" in stderr:
+                errors.append(f"Attempt {attempt}: tweet not found")
+                break
+            errors.append(f"Attempt {attempt}: gallery-dl error: {dry.stderr[:120]}")
+            continue
+
+        # Count expected files
+        expected = [l.strip() for l in dry.stdout.splitlines() if l.strip()]
+        if not expected:
+            errors.append(f"Attempt {attempt}: no media in tweet")
+            continue
+
+        print(f"    Found {len(expected)} media items, downloading...")
+
+        # Download
+        dl_cmd = ["gallery-dl", "-d", str(TMP_DIR), url]
+        try:
+            dl = subprocess.run(dl_cmd, capture_output=True, text=True, timeout=180)
         except subprocess.TimeoutExpired:
             errors.append(f"Attempt {attempt}: download timed out")
             continue
-        except Exception as e:
-            errors.append(f"Attempt {attempt}: {e}")
+
+        # Find downloaded files recursively
+        downloaded = list(TMP_DIR.rglob("*"))
+        downloaded = [f for f in downloaded if f.is_file()]
+
+        if not downloaded:
+            errors.append(f"Attempt {attempt}: download produced no files")
             continue
 
-        # Find new files
-        after = set()
-        for f in output_dir.iterdir():
-            if f.name.startswith(base_name):
-                after.add(f.name)
-
-        new_files = after - before
-
-        if not new_files:
-            # Check if yt-dlp output indicates auth issue
-            stderr = result.stderr.lower() if result.stderr else ""
-            stdout = result.stdout.lower() if result.stdout else ""
-
-            if "login" in stderr or "login" in stdout or "protected" in stderr:
-                errors.append(f"Attempt {attempt}: X requires login/cookies. "
-                              f"Run: yt-dlp --cookies-from-browser chrome {url}")
-            elif "not found" in stderr or "404" in stderr:
-                errors.append(f"Attempt {attempt}: tweet not found or deleted")
-                break  # Don't retry 404s
-            else:
-                errors.append(f"Attempt {attempt}: no media found in tweet")
-            continue
-
-        # Verify each downloaded file
+        # Verify each file
         all_ok = True
-        for fname in sorted(new_files):
-            fpath = output_dir / fname
+        for fpath in downloaded:
             ok, reason = verify_file(fpath)
-
             if not ok:
-                errors.append(f"Attempt {attempt}: {fname} invalid ({reason})")
+                errors.append(f"Attempt {attempt}: {fpath.name} invalid ({reason})")
                 all_ok = False
-                continue
-
-            ext = fpath.suffix.lower()
-            if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
-                images.append(fname)
-            elif ext in ('.mp4', '.webm', '.mov'):
-                if video is None:
-                    video = fname
+            else:
+                ext = fpath.suffix.lower()
+                if ext in ('.mp4', '.webm', '.mov'):
+                    if video is None:
+                        video = fpath
+                else:
+                    images.append(fpath)
 
         if all_ok and (images or video):
             return images, video, errors
 
-        # If we got here, some files failed verification — clean up and retry
-        for fname in new_files:
-            fpath = output_dir / fname
-            if fpath.exists():
-                fpath.unlink()
-
     return [], None, errors
 
 
-def organize_files(new_files, base_dir, images_dir, videos_dir):
-    """Move downloaded files to images/ and videos/ directories."""
-    image_paths = []
-    video_path = None
+def move_to_media_dirs(images, video):
+    """Move files from TMP_DIR to images/ and videos/. Returns (rel_paths, rel_video)."""
+    IMAGES_DIR.mkdir(exist_ok=True)
+    VIDEOS_DIR.mkdir(exist_ok=True)
 
-    for fname in new_files:
-        src = base_dir / fname
-        if not src.exists():
-            continue
-        ext = src.suffix.lower()
-        if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
-            dest = images_dir / fname
-            src.rename(dest)
-            image_paths.append(f"images/{fname}")
-        elif ext in ('.mp4', '.webm', '.mov'):
-            dest = videos_dir / fname
-            src.rename(dest)
-            video_path = f"videos/{fname}"
+    img_rel = []
+    vid_rel = None
 
-    return image_paths, video_path
+    for src in images:
+        # Rename to avoid conflicts: use tweet_id from path
+        parent_dir = src.parent.name  # e.g., "MrLarus"
+        dest_name = f"{parent_dir}_{src.name}"
+        dest = IMAGES_DIR / dest_name
+        # Avoid overwrite
+        counter = 1
+        while dest.exists():
+            stem, ext = dest_name.rsplit('.', 1)
+            dest = IMAGES_DIR / f"{stem}_{counter}.{ext}"
+            counter += 1
+        shutil.move(str(src), str(dest))
+        img_rel.append(f"images/{dest.name}")
+
+    if video:
+        parent_dir = video.parent.name
+        dest_name = f"{parent_dir}_{video.name}"
+        dest = VIDEOS_DIR / dest_name
+        counter = 1
+        while dest.exists():
+            stem, ext = dest_name.rsplit('.', 1)
+            dest = VIDEOS_DIR / f"{stem}_{counter}.{ext}"
+            counter += 1
+        shutil.move(str(video), str(dest))
+        vid_rel = f"videos/{dest.name}"
+
+    # Clean tmp
+    if TMP_DIR.exists():
+        shutil.rmtree(TMP_DIR)
+
+    return img_rel, vid_rel
 
 
 def main():
@@ -220,15 +212,21 @@ def main():
 
     # Single URL mode
     if args.single:
-        print(f"Testing download of: {args.single}")
-        IMAGES_DIR.mkdir(exist_ok=True)
-        VIDEOS_DIR.mkdir(exist_ok=True)
-        imgs, vid, errs = download_one(args.single, ROOT, "test", args.retries)
-        if imgs or vid:
-            print(f"  SUCCESS: {len(imgs)} images, {'1 video' if vid else 'no video'}")
-            organize_files(imgs + ([vid] if vid else []), ROOT, IMAGES_DIR, VIDEOS_DIR)
-        for e in errs:
+        print(f"Testing: {args.single}")
+        images, video, errors = download_one(args.single, args.retries)
+        if images or video:
+            img_rel, vid_rel = move_to_media_dirs(images, video)
+            print(f"  OK: {len(img_rel)} images, {'1 video' if vid_rel else '0 videos'}")
+            for p in img_rel:
+                fsize = (IMAGES_DIR / Path(p).name).stat().st_size // 1024
+                print(f"    {p} ({fsize}KB)")
+            if vid_rel:
+                fsize = (VIDEOS_DIR / Path(vid_rel).name).stat().st_size // 1024
+                print(f"    {vid_rel} ({fsize}KB)")
+        for e in errors:
             print(f"  ERROR: {e}")
+        if not images and not video and not errors:
+            print("  No media found.")
         return
 
     # ========== MAIN FLOW ==========
@@ -237,19 +235,14 @@ def main():
     print("=" * 60)
 
     if not check_prerequisites():
-        print("\nInstall yt-dlp first:")
-        print("  pip install yt-dlp")
-        print("\nOr if using cookies for X authentication:")
-        print("  yt-dlp --cookies-from-browser chrome <url>")
+        print("\nInstall gallery-dl:")
+        print("  pip install gallery-dl")
         sys.exit(1)
 
     data = load_data()
     print(f"\nLoaded {len(data)} prompts")
 
-    IMAGES_DIR.mkdir(exist_ok=True)
-    VIDEOS_DIR.mkdir(exist_ok=True)
-
-    # ===== BUILD TODO LIST =====
+    # Build todo list
     todo = []
     for i, p in enumerate(data):
         link = p.get("link", "")
@@ -269,41 +262,34 @@ def main():
         todo = todo[:args.limit]
         print(f"Limited to first {args.limit}")
 
-    # ===== PROCESS =====
+    # Process
     success = 0
     failed = []
-    skipped_no_link = 0
+    skipped = 0
 
     for idx, prompt_idx in enumerate(todo):
         p = data[prompt_idx]
         link = p.get("link", "")
 
         print(f"\n[{idx+1}/{len(todo)}] #{prompt_idx}: {p.get('title','')[:60]}")
-        print(f"  URL: {link}")
+        print(f"  {link}")
 
-        base_name = sanitize(f"{prompt_idx:03d}")
-        imgs, vid, errors = download_one(link, ROOT, base_name, args.retries)
+        images, video, errors = download_one(link, args.retries)
 
-        if errors:
-            for e in errors:
-                print(f"  ! {e}")
+        for e in errors:
+            print(f"  ! {e}")
 
-        if imgs or vid:
-            # Move to proper directories
-            all_files = imgs + ([vid] if vid else [])
-            img_paths, vid_path = organize_files(all_files, ROOT, IMAGES_DIR, VIDEOS_DIR)
+        if images or video:
+            img_rel, vid_rel = move_to_media_dirs(images, video)
 
-            # Update data
-            if img_paths:
+            if img_rel:
                 p.setdefault("images", [])
-                p["images"].extend(img_paths)
-            if vid_path and not p.get("video"):
-                p["video"] = vid_path
+                p["images"].extend(img_rel)
+            if vid_rel and not p.get("video"):
+                p["video"] = vid_rel
 
-            print(f"  OK: {len(img_paths)} images, {'1 video' if vid_path else '0 videos'}")
+            print(f"  OK: {len(img_rel)} images" + (f", 1 video" if vid_rel else ""))
             success += 1
-
-            # Save after each success
             save_data(data)
         else:
             print(f"  FAILED after {args.retries} attempts")
@@ -311,10 +297,9 @@ def main():
                 "index": prompt_idx,
                 "title": p.get("title", ""),
                 "link": link,
-                "errors": errors
+                "errors": errors,
             })
 
-        # Rate limit
         if idx < len(todo) - 1:
             time.sleep(args.delay)
 
@@ -322,39 +307,26 @@ def main():
     print("\n" + "=" * 60)
     print("DOWNLOAD REPORT")
     print("=" * 60)
-    print(f"  Success:  {success}")
-    print(f"  Failed:   {len(failed)}")
-    print(f"  Total:    {len(todo)}")
+    total_imgs = sum(len(p.get("images", [])) for p in data)
+    total_vids = sum(1 for p in data if p.get("video"))
+    print(f"  Total media in library: {total_imgs} images, {total_vids} videos")
+    print(f"  This run: {success} succeeded, {len(failed)} failed")
 
     save_data(data)
 
     if failed:
-        print(f"\nFAILED PROMPTS (need manual handling):")
+        print(f"\nFAILED ({len(failed)} items — need manual handling):")
         with open(FAILURE_LOG, "w", encoding="utf-8") as f:
-            f.write("# Failed downloads — need manual handling\n\n")
+            f.write("# Failed downloads — open each link and download manually\n\n")
             for item in failed:
-                msg = f"  #{item['index']}: {item['link']}"
-                print(msg)
-                f.write(f"{msg}\n")
+                print(f"  #{item['index']}: {item['link']}")
+                f.write(f"#{item['index']}: {item['link']}\n")
                 for e in item['errors']:
-                    print(f"      {e}")
-                    f.write(f"      {e}\n")
+                    f.write(f"  {e}\n")
                 f.write("\n")
-        print(f"\nFull list saved to: {FAILURE_LOG}")
-        print("\nManual fix options:")
-        print("  1. Open each link in browser, download media manually")
-        print("  2. Place images in images/, videos in videos/")
-        print("  3. Update data.json with paths")
-        print("  4. Run: python scripts/build_html.py && git push")
-    else:
-        print("\nAll downloads successful!")
-        if FAILURE_LOG.exists():
-            FAILURE_LOG.unlink()
+        print(f"\nSaved to: {FAILURE_LOG}")
 
-    print(f"\nNext steps:")
-    print(f"  1. Review images/ and videos/ directories")
-    print(f"  2. python scripts/build_html.py")
-    print(f"  3. git add . && git commit -m 'Add media files' && git push")
+    print(f"\nNext: python scripts/build_html.py && git push")
 
 
 if __name__ == "__main__":

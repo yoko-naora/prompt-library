@@ -29,7 +29,7 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install yt-dlp
+        run: pip install gallery-dl
 
       - name: Fetch new tweets (optional)
         if: ${{ github.event.inputs.fetch_new == 'true' }}
