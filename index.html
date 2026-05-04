@@ -231,7 +231,7 @@ body {
   display: flex; flex-direction: column; gap: 12px;
 }
 .media-grid img {
-  width: 480px; max-width: 100%; height: auto;
+  width: 100%; height: auto; max-width: 100%;
   border-radius: 4px; cursor: pointer; transition: opacity 0.15s;
 }
 .media-grid img:hover { opacity: 0.85; }
@@ -522,7 +522,6 @@ function render() {
         <span class="type-badge ${ptype}">POST</span>
         <div class="card-title">${escHtml(isJa && p.title_ja ? p.title_ja : p.title)}</div>
         ${p.link ? `<a href="${escAttr(p.link)}" target="_blank" class="card-link-inline">${t.viewOnX}</a>` : ''}
-        <button class="copy-btn-mini" id="copyMain-${i}" onclick="copyField(${i},'${ptype}')">${t.copy}</button>
       </div>
       <!-- Row 2: GPT-Image-2 Prompt -->
       ${ip ? `
@@ -531,24 +530,24 @@ function render() {
         <div class="row-content">${escHtml(ip)}</div>
         <button class="copy-btn-mini" id="copyImg-${i}" onclick="copyField(${i},'image')">${t.copy}</button>
       </div>` : ''}
-      <!-- Row 3: Seedance Prompt -->
+      <!-- Row 3: Images -->
+      ${hasImages ? `
+      <div class="card-row media-row">
+        <div class="row-label">Images</div>
+        ${renderImageGrid(p, i)}
+      </div>` : ''}
+      <!-- Row 4: Seedance Prompt -->
       ${vp ? `
       <div class="card-row prompt-row">
         <span class="row-label">Seedance</span>
         <div class="row-content">${escHtml(vp)}</div>
         <button class="copy-btn-mini" id="copyVid-${i}" onclick="copyField(${i},'video')">${t.copy}</button>
       </div>` : ''}
-      <!-- Row 4: Images -->
-      ${hasImages ? `
-      <div class="card-row media-row">
-        <div class="row-label">Images</div>
-        ${renderImageGrid(p, i)}
-      </div>` : ''}
       <!-- Row 5: Video -->
       ${hasVideo ? `
       <div class="card-row media-row">
         <div class="row-label">Video</div>
-        <video src="${escAttr(p.video)}" controls playsinline preload="metadata" style="width:100%;max-height:280px;border-radius:4px;background:#000;"></video>
+        <video src="${escAttr(p.video)}" controls playsinline preload="metadata" style="width:100%;max-height:400px;border-radius:4px;background:#000;"></video>
       </div>` : ''}
       ${(ip||vp) ? `<button class="expand-hint" onclick="toggleExpand(${i})">${isExpanded ? t.collapse : t.expand}</button>` : ''}
     </div>`;
