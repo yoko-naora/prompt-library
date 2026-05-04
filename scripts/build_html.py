@@ -27,8 +27,8 @@ def main():
         print("ERROR: START_MARKER not found in HTML")
         return
 
-    # Start of JSON array content
-    content_start = start + len(START_MARKER) + 1  # +1 for '['
+    # Start of JSON array content (after "const PROMPTS = ")
+    content_start = start + len(START_MARKER)
     end_marker_pos = html.find(END_MARKER, content_start)
     if end_marker_pos == -1:
         # Fallback: find the closing ];
@@ -44,7 +44,8 @@ def main():
             return
 
     # Reconstruct HTML
-    new_html = html[:content_start] + json_str + html[end:]
+    # json_str already includes its own closing ], so skip template's ] by using end+1
+    new_html = html[:content_start] + json_str + html[end+1:]
 
     with open(HTML_FILE, "w", encoding="utf-8") as f:
         f.write(new_html)
