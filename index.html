@@ -107,7 +107,6 @@ body {
 /* Cards */
 .cards-grid {
   display: flex; flex-direction: column; gap: 20px;
-  max-width: 680px;
 }
 .card {
   background: var(--card); border: 1px solid var(--border);
@@ -308,7 +307,7 @@ const PROMPTS = [{"cat": "电商/商业海报", "title": "2026-04-16T17:06:38.00
 let currentCat = 'all';
 let currentLang = 'zh';
 let currentType = 'all';
-let expandedCards = new Set();
+let expandedCards = new Set(PROMPTS.map((_, i) => i));
 
 // ===== AUTO CLASSIFY =====
 function classifyPrompt(p) {
