@@ -121,33 +121,35 @@ def main():
             print(f"  Image: {dest_name} ({dest.stat().st_size // 1024}KB)")
 
     # Determine prompt fields
-    has_image_keywords = bool(re.search(r'gpt.image|image2|image prompt|chatgpt.*image',
+    has_image_keywords = bool(re.search(r'gpt[\s.\-]*image|image2|image\s*prompt|chatgpt.*image',
                                          content, re.IGNORECASE))
-    has_video_keywords = bool(re.search(r'seedance|video prompt|生成.*视频|生成.*短片',
+    has_video_keywords = bool(re.search(r'seedance|video\s*prompt|生成.*视频|生成.*短片',
                                         content, re.IGNORECASE))
 
     if ptype == "video":
         video_content = content
         image_content = ""
         if has_image_keywords:
-            # Split at "Image prompt:" or "Image:" to get the image prompt text
-            m = re.search(r'(?is)(?:image\s*prompt|gpt\s*image)\s*[:：]\s*\n?(.+)', content)
+            # Extract image prompt: from "Image prompt:" / "Image Prompt:" to before "Seedance" or end
+            m = re.search(r'(?is)(?:image\s*prompt|gpt[\s.\-]*image)\s*[:：]\s*\n?(.+?)(?=\bseedance\b|$)', content)
             if m:
                 image_content = m.group(1).strip()
             else:
-                # If no explicit "Image prompt:" marker, check if content starts with image-describing keywords
-                img_m = re.search(r'(?is)^.*?(?=\bseedance\b)', content)
-                if img_m and img_m.group().strip():
-                    image_content = img_m.group().strip().rstrip("+").strip()
+                # If "Image prompt:" not found but has image keywords, try content before "Seedance"
+                parts = re.split(r'(?i)\bseedance\b', content, maxsplit=1)
+                image_content = parts[0].strip().rstrip("+").strip()
+    elif ptype == "image" and has_video_keywords:
+        # Image tweet that also mentions Seedance: extract Seedance part
+        m = re.search(r'(?is)(?:seedance|video\s*prompt)\s*[:：]?\s*\n?(.+?)(?=\bimage\s*prompt\b|$)', content)
+        if m:
+            video_content = m.group(1).strip()
+        else:
+            parts = re.split(r'(?i)\bimage\s*prompt\b', content, maxsplit=1)
+            video_content = parts[0].strip() if len(parts) > 1 else ""
+        image_content = content
     else:
         image_content = content
         video_content = ""
-        if has_video_keywords:
-            m = re.search(r'(?is)(?:seedance|video\s*prompt)\s*[:：]?\s*\n?(.+)', content)
-            if m:
-                video_content = m.group(1).strip()
-            else:
-                video_content = content
 
     new_entry = {
         "cat": cat,

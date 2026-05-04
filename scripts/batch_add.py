@@ -45,9 +45,7 @@ def classify_tweet(text, meta):
     txt = text.lower()
     if "seedance" in txt:
         return "video"
-    if re.search(r'16.*宫格.*编舞|生成.*舞|生成.*短片|生成.*广告片|生成.*视频', txt):
-        return "video"
-    if "gpt.image" in txt or "image2" in txt or "image prompt" in txt[:100].lower():
+    if re.search(r'gpt[\s.\-]*image|image2|image\s*prompt', txt):
         return "image"
     return "image"
 
@@ -65,16 +63,22 @@ def add_one(url, cat):
     content = meta.get("content", "")
 
     ptype = classify_tweet(content, meta)
-    has_img_kw = bool(re.search(r'gpt.image|image2|image prompt', content, re.IGNORECASE))
-    has_vid_kw = bool(re.search(r'seedance|video prompt', content, re.IGNORECASE))
+    has_img_kw = bool(re.search(r'gpt[\s.\-]*image|image2|image\s*prompt', content, re.IGNORECASE))
+    has_vid_kw = bool(re.search(r'seedance|video\s*prompt', content, re.IGNORECASE))
 
     if ptype == "video":
         video_content = content
         image_content = ""
         if has_img_kw:
-            m = re.search(r'(?is)(?:image\s*prompt|gpt\s*image)\s*[:：]\s*\n?(.+)', content)
+            m = re.search(r'(?is)(?:image\s*prompt|gpt[\s.\-]*image)\s*[:：]\s*\n?(.+?)(?=\bseedance\b|$)', content)
             if m:
                 image_content = m.group(1).strip()
+            else:
+                parts = re.split(r'(?i)\bseedance\b', content, maxsplit=1)
+                image_content = parts[0].strip().rstrip("+").strip()
+    elif ptype == "image" and has_vid_kw:
+        image_content = content
+        video_content = content
     else:
         image_content = content
         video_content = ""
