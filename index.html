@@ -106,9 +106,8 @@ body {
 .active-cat-tag .clear:hover { opacity: 1; }
 /* Cards */
 .cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  display: flex; flex-direction: column; gap: 20px;
+  max-width: 680px;
 }
 .card {
   background: var(--card); border: 1px solid var(--border);
@@ -146,10 +145,9 @@ body {
 .card.type-video .prompt-row .row-label { color: #1E3A5F; }
 .prompt-row .row-content {
   font-size: 13px; color: var(--muted); line-height: 1.55; flex: 1;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: pre-wrap;
 }
-.card.expanded .prompt-row .row-content { -webkit-line-clamp: unset; }
+.card:not(.expanded) .media-row { display: none; }
 .prompt-row .copy-btn-mini {
   flex-shrink: 0; padding: 2px 8px; border: 1px solid var(--border);
   border-radius: 3px; font-size: 10px; font-weight: 700;
@@ -229,20 +227,16 @@ body {
   flex-shrink: 0;
 }
 /* ===== CARD MEDIA ===== */
-.card-media { margin-top: 12px; }
-.card-media .media-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+.media-grid {
+  display: flex; flex-direction: column; gap: 12px;
 }
-.card-media .media-grid.col-1 { grid-template-columns: 1fr; }
-.card-media .media-grid.col-3 { grid-template-columns: repeat(3, 1fr); }
-.card-media .media-grid.col-4 { grid-template-columns: repeat(2, 1fr); }
-.card-media img {
-  width: 100%; aspect-ratio: 4/3; object-fit: cover;
+.media-grid img {
+  width: 480px; max-width: 100%; height: auto;
   border-radius: 4px; cursor: pointer; transition: opacity 0.15s;
 }
-.card-media img:hover { opacity: 0.85; }
+.media-grid img:hover { opacity: 0.85; }
 .card-media video {
-  width: 100%; max-height: 320px; border-radius: 4px;
+  width: 480px; max-width: 100%; border-radius: 4px;
   background: #000; outline: none;
 }
 /* ===== LIGHTBOX ===== */
@@ -514,7 +508,6 @@ function render() {
     const ptype = p.type || 'image';
     const isJa = currentLang === 'ja';
 
-    const date = p.date || '';
     const ip = isJa && p.image_prompt_ja ? p.image_prompt_ja : (p.image_prompt || '');
     const vp = isJa && p.video_prompt_ja ? p.video_prompt_ja : (p.video_prompt || '');
     const hasImages = p.images && Array.isArray(p.images) && p.images.length > 0;
@@ -523,19 +516,18 @@ function render() {
 
     return `
     <div class="card type-${ptype}${isExpanded ? ' expanded' : ''}" id="card-${i}">
-      <!-- Row 1: Title + Date + Copy -->
+      <!-- Row 1: Title + POST badge + Copy -->
       <div class="card-row card-row-header">
         <span class="card-num">#${i + 1}</span>
-        <span class="type-badge ${ptype}">${ptype==='video' ? 'VIDEO' : 'IMAGE'}</span>
+        <span class="type-badge ${ptype}">POST</span>
         <div class="card-title">${escHtml(isJa && p.title_ja ? p.title_ja : p.title)}</div>
-        ${date ? `<span class="card-date">${escHtml(date)}</span>` : ''}
         ${p.link ? `<a href="${escAttr(p.link)}" target="_blank" class="card-link-inline">${t.viewOnX}</a>` : ''}
         <button class="copy-btn-mini" id="copyMain-${i}" onclick="copyField(${i},'${ptype}')">${t.copy}</button>
       </div>
-      <!-- Row 2: Image2 Prompt -->
+      <!-- Row 2: GPT-Image-2 Prompt -->
       ${ip ? `
       <div class="card-row prompt-row">
-        <span class="row-label">Image2</span>
+        <span class="row-label">GPT-image-2</span>
         <div class="row-content">${escHtml(ip)}</div>
         <button class="copy-btn-mini" id="copyImg-${i}" onclick="copyField(${i},'image')">${t.copy}</button>
       </div>` : ''}
@@ -566,8 +558,7 @@ function render() {
 function renderImageGrid(p, i) {
   const images = p.images;
   if (!images || images.length === 0) return '';
-  const cols = images.length === 1 ? 'col-1' : images.length === 3 ? 'col-3' : images.length >= 4 ? 'col-4' : '';
-  let html = `<div class="media-grid ${cols}">`;
+  let html = '<div class="media-grid">';
   images.forEach((src, idx) => {
     html += `<img src="${escAttr(src)}" alt="" loading="lazy" onclick="event.stopPropagation();openLightbox('${escAttr(src)}')" onerror="this.style.display='none'">`;
   });
